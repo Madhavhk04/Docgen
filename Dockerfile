@@ -1,41 +1,43 @@
 FROM python:3.11-slim
 
+# -------------------------------
 # Install system dependencies
-# libreoffice-writer: for docx -> pdf
-# default-jre: java runtime needed for libreoffice
-# dos2unix: ensure script is in LF format
+# -------------------------------
+# libreoffice-writer : docx → pdf
+# default-jre        : required by libreoffice
+# dos2unix           : line ending safety
 RUN apt-get update && apt-get install -y \
     libreoffice-writer \
     default-jre \
     dos2unix \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
+# -------------------------------
+# Set working directory
+# -------------------------------
 WORKDIR /app
 
-# Copy Frontend
-COPY frontend /app/frontend
-
-# Copy Backend
-COPY backend /app/backend
-
-# Copy Startup Script
-COPY startup.sh /app/startup.sh
-
-# Fix line endings and permissions
-RUN dos2unix /app/startup.sh && chmod +x /app/startup.sh
-
-# Set working directory to backend so paths are relative as expected
-WORKDIR /app/
-
+# -------------------------------
+# Copy Python requirements
+# -------------------------------
+# requirements.txt MUST be at repo root
+COPY requirements.txt /app/requirements.txt
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# -------------------------------
+# Copy backend source code
+# -------------------------------
+COPY backend /app/backend
 
-# Expose port (Documentation only, Azure uses WEBSITES_PORT)
+# -------------------------------
+# Expose port
+# -------------------------------
 EXPOSE 8000
 
-
-
-# Run the application via startup script
+# -------------------------------
+# Start FastAPI
+# -------------------------------
 CMD ["python", "-m", "uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
