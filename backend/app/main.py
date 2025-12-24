@@ -11,16 +11,11 @@ load_dotenv(override=False)
 
 from .template_renderer import render_docx
 from .ai_client import generate_structured_with_gemini, GeminiError
-from .database import engine, get_db, Base
+from .database import get_db
 from .models import User, Document
 from .auth import get_password_hash, verify_password, create_access_token, get_current_user
-from sqlalchemy.orm import Session
-from fastapi.security import OAuth2PasswordRequestForm
-from datetime import timedelta
-import shutil
-
 # Init Database Tables
-Base.metadata.create_all(bind=engine)
+# Base.metadata.create_all(bind=engine) # Removed for Cosmos DB
 
 
 logging.basicConfig(level=logging.INFO)
@@ -69,22 +64,34 @@ class UserSchema(BaseModel):
     security_answer: str
 
 @app.post("/auth/signup")
-def signup(user: UserSchema, db: Session = Depends(get_db)):
-    db_user = db.query(User).filter(User.email == user.email).first()
-    if db_user:
+def signup(user: UserSchema, db: dict = Depends(get_db)):
+    users_container = db["users"]
+    
+    # Check if exists
+    query = "SELECT * FROM c WHERE c.email = @email"
+    items = list(users_container.query_items(
+        query=query, 
+        parameters=[{"name": "@email", "value": user.email}],
+        enable_cross_partition_query=True
+    ))
+    
+    if items:
         raise HTTPException(status_code=400, detail="Email already registered")
     
+    # Create User Model
     new_user = User(
         email=user.email,
         hashed_password=get_password_hash(user.password),
         full_name=user.full_name,
         profession=user.profession,
         security_question=user.security_question,
-        security_answer_hash=get_password_hash(user.security_answer) # Hash answer like password
+        security_answer_hash=get_password_hash(user.security_answer),
+        partitionKey=user.email # Set partition key
     )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    
+    # Save to Cosmos (dump model to dict)
+    users_container.create_item(body=new_user.dict(by_alias=True))
+    
     return {"msg": "User created successfully"}
 
 class UserProfile(BaseModel):
@@ -106,15 +113,22 @@ def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 @app.put("/auth/me", response_model=UserProfile)
-def update_user_me(user_update: UserUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def update_user_me(user_update: UserUpdate, current_user: User = Depends(get_current_user), db: dict = Depends(get_db)):
+    users_container = db["users"]
+    
     # Update fields if provided
     if user_update.full_name is not None:
         current_user.full_name = user_update.full_name
     if user_update.profession is not None:
         current_user.profession = user_update.profession
     
-    db.commit()
-    db.refresh(current_user)
+    # Check partition key presence
+    if not current_user.partitionKey:
+        current_user.partitionKey = current_user.email
+        
+    # Upsert in Cosmos
+    users_container.upsert_item(body=current_user.dict(by_alias=True))
+    
     return current_user
 
 class GetQuestionRequest(BaseModel):
@@ -126,19 +140,38 @@ class ResetPasswordRequest(BaseModel):
     new_password: str
 
 @app.post("/auth/get-question")
-def get_security_question(req: GetQuestionRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == req.email).first()
-    if not user:
+def get_security_question(req: GetQuestionRequest, db: dict = Depends(get_db)):
+    users_container = db["users"]
+    query = "SELECT * FROM c WHERE c.email = @email"
+    items = list(users_container.query_items(
+        query=query, 
+        parameters=[{"name": "@email", "value": req.email}],
+        enable_cross_partition_query=True
+    ))
+    
+    if not items:
         raise HTTPException(status_code=404, detail="User not found")
+        
+    user = User(**items[0])
+    
     if not user.security_question:
          raise HTTPException(status_code=400, detail="User has no security question set")
     return {"question": user.security_question}
 
 @app.post("/auth/reset-password")
-def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == req.email).first()
-    if not user:
+def reset_password(req: ResetPasswordRequest, db: dict = Depends(get_db)):
+    users_container = db["users"]
+    query = "SELECT * FROM c WHERE c.email = @email"
+    items = list(users_container.query_items(
+        query=query, 
+        parameters=[{"name": "@email", "value": req.email}],
+        enable_cross_partition_query=True
+    ))
+    
+    if not items:
          raise HTTPException(status_code=404, detail="User not found")
+    
+    user = User(**items[0])
     
     if not user.security_answer_hash:
           raise HTTPException(status_code=400, detail="User has no security answer set")
@@ -148,12 +181,26 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
          
     # Reset Password
     user.hashed_password = get_password_hash(req.new_password)
-    db.commit()
+    
+    if not user.partitionKey:
+        user.partitionKey = user.email
+
+    users_container.upsert_item(body=user.dict(by_alias=True))
+    
     return {"msg": "Password reset successfully"}
 
 @app.post("/auth/login")
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == form_data.username).first()
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: dict = Depends(get_db)):
+    users_container = db["users"]
+    query = "SELECT * FROM c WHERE c.email = @email"
+    items = list(users_container.query_items(
+        query=query, 
+        parameters=[{"name": "@email", "value": form_data.username}],
+        enable_cross_partition_query=True
+    ))
+    
+    user = User(**items[0]) if items else None
+    
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
     
@@ -168,75 +215,69 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 # --- STARTUP DB MIGRATION CHECK ---
 @app.on_event("startup")
 def check_db_schema():
-    # Simple migration for SQLite to add 'input_data' column if missing
-    import sqlite3
-    try:
-        # Check if column exists
-        with engine.connect() as conn:
-            # This is specific to SQLite:
-            # We can use raw sql or inspection.
-            pass
-            
-        # Let's do a raw connection to be simple and safe against session mechanics
-        # app.db path:
-        db_path = STORAGE_DIR / "app.db"
-        if not db_path.exists(): return
-        
-        con = sqlite3.connect(str(db_path))
-        cur = con.cursor()
-        # Get columns
-        cur.execute("PRAGMA table_info(documents)")
-        columns = [info[1] for info in cur.fetchall()]
-        if "input_data" not in columns:
-            logger.info("Migrating DB: Adding input_data column...")
-            cur.execute("ALTER TABLE documents ADD COLUMN input_data JSON")
-            con.commit()
-            
-        # Check users table for security columns
-        cur.execute("PRAGMA table_info(users)")
-        user_columns = [info[1] for info in cur.fetchall()]
-        if "security_question" not in user_columns:
-            logger.info("Migrating DB: Adding security columns to users...")
-            cur.execute("ALTER TABLE users ADD COLUMN security_question TEXT")
-            cur.execute("ALTER TABLE users ADD COLUMN security_answer_hash TEXT")
-            con.commit()
-            
-        con.close()
-            
-    except Exception as e:
-        logger.error(f"Migration check failed: {e}")
+    # Deprecated for Cosmos DB
+    pass
 
 # --- DASHBOARD ROUTER ---
 
 @app.get("/dashboard/documents")
-def get_user_documents(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # Return reverse sorted by ID (newest first)
-    return db.query(Document).filter(Document.user_id == current_user.id).order_by(Document.id.desc()).all()
+def get_user_documents(current_user: User = Depends(get_current_user), db: dict = Depends(get_db)):
+    documents_container = db["documents"]
+    # Query docs for user
+    query = "SELECT * FROM c WHERE c.user_id = @uid ORDER BY c.created_at DESC"
+    items = list(documents_container.query_items(
+        query=query,
+        parameters=[{"name": "@uid", "value": current_user.id}],
+        enable_cross_partition_query=True
+    ))
+    return items
 
 @app.get("/dashboard/doc/{doc_id}")
-def get_document_details(doc_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    doc = db.query(Document).filter(Document.id == doc_id, Document.user_id == current_user.id).first()
-    if not doc:
+def get_document_details(doc_id: str, current_user: User = Depends(get_current_user), db: dict = Depends(get_db)):
+    documents_container = db["documents"]
+    # Doc ID is string now (uuid)
+    query = "SELECT * FROM c WHERE c.id = @id AND c.user_id = @uid"
+    items = list(documents_container.query_items(
+        query=query,
+        parameters=[
+            {"name": "@id", "value": doc_id},
+            {"name": "@uid", "value": current_user.id}
+        ],
+        enable_cross_partition_query=True
+    ))
+    
+    if not items:
         raise HTTPException(status_code=404, detail="Document not found")
-    return doc
+        
+    return items[0]
 
 @app.delete("/dashboard/delete/{doc_id}")
-def delete_document(doc_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    doc = db.query(Document).filter(Document.id == doc_id, Document.user_id == current_user.id).first()
-    if not doc:
+def delete_document(doc_id: str, current_user: User = Depends(get_current_user), db: dict = Depends(get_db)):
+    documents_container = db["documents"]
+    
+    # 1. Get doc to find file paths
+    query = "SELECT * FROM c WHERE c.id = @id AND c.user_id = @uid"
+    items = list(documents_container.query_items(
+        query=query,
+        parameters=[
+            {"name": "@id", "value": doc_id},
+            {"name": "@uid", "value": current_user.id}
+        ],
+        enable_cross_partition_query=True
+    ))
+    
+    if not items:
         raise HTTPException(status_code=404, detail="Document not found")
+        
+    doc = Document(**items[0])
     
     # Try to delete physical files
-    # We use similar logic to download search to find them
-    # But strictly, we can just look for names we know.
     stored_path = BASE_DIR / doc.file_path
     stem = stored_path.stem
-    parent_dir = stored_path.parent
     
+    # ... (Keep existing file deletion logic) ...
     paths_to_check = [
-        # Check explicit path
         stored_path,
-        # Check stem variations in generated folder
         GENERATED / f"{stem}.docx",
         GENERATED / f"{stem}.pdf",
         GENERATED / f"{doc.doc_type}_{stem}.docx",
@@ -254,16 +295,31 @@ def delete_document(doc_id: int, current_user: User = Depends(get_current_user),
         except Exception as e:
             logger.error(f"Failed to delete {p}: {e}")
             
-    db.delete(doc)
-    db.commit()
+    # Delete from DB
+    # Cosmos delete requires partition key
+    documents_container.delete_item(item=doc_id, partition_key=doc.partitionKey)
+    
     return {"msg": "Document deleted"}
 
 
 @app.get("/dashboard/download/{doc_id}")
-def download_dashboard_doc(doc_id: int, format: str = "pdf", current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    doc = db.query(Document).filter(Document.id == doc_id, Document.user_id == current_user.id).first()
-    if not doc:
-        raise HTTPException(status_code=404, detail="Document not found")
+def download_dashboard_doc(doc_id: str, format: str = "pdf", current_user: User = Depends(get_current_user), db: dict = Depends(get_db)):
+    documents_container = db["documents"]
+    
+    query = "SELECT * FROM c WHERE c.id = @id AND c.user_id = @uid"
+    items = list(documents_container.query_items(
+        query=query,
+        parameters=[
+            {"name": "@id", "value": doc_id},
+            {"name": "@uid", "value": current_user.id}
+        ],
+        enable_cross_partition_query=True
+    ))
+    
+    if not items:
+         raise HTTPException(status_code=404, detail="Document not found")
+         
+    doc = Document(**items[0])
     
     # Robust File Finding Strategy
     # stored 'doc.file_path' might be relative to BASE_DIR (backend/app), but files are scattered.
@@ -333,7 +389,7 @@ class GenerateRequest(BaseModel):
 
 
 @app.post("/generate")
-def generate(req: GenerateRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def generate(req: GenerateRequest, current_user: User = Depends(get_current_user), db: dict = Depends(get_db)):
     doc_type = (req.doc_type or "").strip().lower()
     if not doc_type:
         raise HTTPException(status_code=400, detail="doc_type is required")
@@ -403,16 +459,20 @@ def generate(req: GenerateRequest, current_user: User = Depends(get_current_user
     # --- SAVE TO DATABASE ---
     rel_path = f"../data/generated/{final_file.name}"
     
+
+    
     new_doc = Document(
         user_id=current_user.id,
         filename=final_file.name,
         file_path=rel_path,
         doc_type=doc_type,
-        input_data=fields # Store inputs for editing
+        input_data=fields, # Store inputs for editing
+        partitionKey=current_user.id # Set partition key
     )
-    db.add(new_doc)
-    db.commit()
-    db.refresh(new_doc)
+    
+    # Save to Cosmos
+    db["documents"].create_item(body=new_doc.dict(by_alias=True))
+    # db.commit() # Not needed
 
     return FileResponse(
         path=str(final_file),

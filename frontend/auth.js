@@ -16,7 +16,7 @@ function removeToken() {
 function checkAuth(redirectIfMissing = true) {
     const token = getToken();
     if (!token && redirectIfMissing) {
-        window.location.href = "/login.html";
+        window.location.href = "/static/login.html";
         return false;
     }
     return true;
@@ -30,7 +30,7 @@ function logout() {
 async function authenticatedFetch(url, options = {}) {
     const token = getToken();
     if (!token) {
-        window.location.href = "/login.html";
+        window.location.href = "/static/login.html";
         return null;
     }
 

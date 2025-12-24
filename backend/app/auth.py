@@ -33,7 +33,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+async def get_current_user(token: str = Depends(oauth2_scheme), db: dict = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -47,7 +47,25 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     except JWTError:
         raise credentials_exception
     
-    user = db.query(User).filter(User.email == email).first()
-    if user is None:
+    users_container = db["users"]
+    try:
+        # Cosmos DB Query
+        query = "SELECT * FROM c WHERE c.email = @email"
+        params = [{"name": "@email", "value": email}]
+        items = list(users_container.query_items(
+            query=query,
+            parameters=params,
+            enable_cross_partition_query=True
+        ))
+        
+        if not items:
+            raise credentials_exception
+            
+        user_data = items[0]
+        # Return User model (Pydantic)
+        return User(**user_data)
+        
+    except Exception as e:
+        # Log error?
+        print(f"Auth DB Error: {e}")
         raise credentials_exception
-    return user

@@ -1,30 +1,32 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON
-from sqlalchemy.orm import relationship
+from pydantic import BaseModel, Field, EmailStr
+from typing import Optional, List, Dict, Any
 from datetime import datetime
-from .database import Base
+import uuid
 
-class User(Base):
-    __tablename__ = "users"
-
-    id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
-    full_name = Column(String, nullable=True)
-    profession = Column(String, nullable=True)
-    security_question = Column(String, nullable=True)
-    security_answer_hash = Column(String, nullable=True)
+class User(BaseModel):
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex)
+    email: EmailStr
+    hashed_password: str
+    full_name: Optional[str] = None
+    profession: Optional[str] = None
+    security_question: Optional[str] = None
+    security_answer_hash: Optional[str] = None
     
-    documents = relationship("Document", back_populates="owner")
+    # Cosmos DB specific fields
+    partitionKey: str = Field(default="", alias="partitionKey") # usually same as email for users
 
-class Document(Base):
-    __tablename__ = "documents"
+    class Config:
+        populate_by_name = True
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    filename = Column(String)
-    file_path = Column(String) # Relative path to storage
-    doc_type = Column(String)  # resume, letter, etc.
-    created_at = Column(DateTime, default=datetime.utcnow)
-    input_data = Column(JSON, nullable=True) # Store inputs for editing
+class Document(BaseModel):
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex)
+    user_id: str
+    filename: str
+    file_path: str
+    doc_type: str
+    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    input_data: Optional[Dict[str, Any]] = None
+    
+    # Cosmos DB specific
+    partitionKey: str = Field(default="", alias="partitionKey") # usually same as user_id for documents
 
-    owner = relationship("User", back_populates="documents")

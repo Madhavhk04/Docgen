@@ -7,7 +7,7 @@
     <title>Docorator - Login</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 
 <body class="auth-body">
@@ -79,11 +79,11 @@
         </div>
 
         <div class="auth-footer">
-            Don't have an account? <a href="/signup.html">Sign Up</a>
+            Don't have an account? <a href="/static/signup.html">Sign Up</a>
         </div>
     </div>
 
-    <script src="/auth.js"></script>
+    <script src="/static/auth.js"></script>
     <script>
         async function login(e) {
             e.preventDefault();
@@ -110,7 +110,7 @@
                 if (res.ok) {
                     const data = await res.json();
                     setToken(data.access_token);
-                    window.location.href = '/dashboard.html';
+                    window.location.href = '/static/dashboard.html';
                 } else {
                     const err = await res.json();
                     alert(err.detail || "Login failed");
