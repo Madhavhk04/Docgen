@@ -16,7 +16,7 @@ function removeToken() {
 function checkAuth(redirectIfMissing = true) {
     const token = getToken();
     if (!token && redirectIfMissing) {
-        window.location.href = "/static/login.html";
+        window.location.href = "/login.html";
         return false;
     }
     return true;
@@ -24,13 +24,13 @@ function checkAuth(redirectIfMissing = true) {
 
 function logout() {
     removeToken();
-    window.location.href = "/static/login.html";
+    window.location.href = "/login.html";
 }
 
 async function authenticatedFetch(url, options = {}) {
     const token = getToken();
     if (!token) {
-        window.location.href = "/static/login.html";
+        window.location.href = "/login.html";
         return null;
     }
 

@@ -304,7 +304,7 @@ async function generateDocument() {
     try {
         const token = localStorage.getItem("token");
         if (!token) {
-            window.location.href = "/static/login.html";
+            window.location.href = "/login.html";
             return;
         }
 
