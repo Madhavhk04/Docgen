@@ -4,6 +4,7 @@ import time
 import google.generativeai as genai
 from prompts import PROMPTS
 
+# Fixed relative import
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 
 if GEMINI_KEY:
