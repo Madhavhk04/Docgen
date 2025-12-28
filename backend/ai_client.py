@@ -2,7 +2,7 @@ import os
 import json
 import time
 import google.generativeai as genai
-from .prompts import PROMPTS
+from prompts import PROMPTS
 
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 
