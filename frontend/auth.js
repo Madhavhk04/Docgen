@@ -1,5 +1,5 @@
 // auth.js
-const API_BASE = "http://localhost:8000";
+const API_BASE = window.APP_CONFIG.API_URL;
 
 function getToken() {
     return localStorage.getItem("token");
