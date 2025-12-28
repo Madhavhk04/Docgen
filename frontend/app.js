@@ -1,4 +1,4 @@
-const API_URL = "https://docorator1-ddhhfpc3eefvfrcy.centralindia-01.azurewebsites.net";
+const API_URL = "http://localhost:8000";
 
 let currentMode = 'manual';
 

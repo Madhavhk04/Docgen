@@ -21,6 +21,6 @@ mkdir -p "$STORAGE_DIR"
 
 # ---- Launch app ----
 echo "Launching Uvicorn..."
-exec python -m uvicorn app.main:app \
+exec python -m uvicorn main:app \
   --host 0.0.0.0 \
   --port $LISTEN_PORT

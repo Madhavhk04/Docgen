@@ -71,7 +71,7 @@ def create_resume_template():
     doc.add_paragraph("- {{ ach }}", style='List Bullet')
     doc.add_paragraph("{% endfor %}")
 
-    output_path = os.path.join("app", "templates", "resume_template.docx")
+    output_path = os.path.join("templates", "resume_template.docx")
     doc.save(output_path)
     print(f"Template saved to {output_path}")
 

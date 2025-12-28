@@ -1,5 +1,5 @@
 // auth.js
-const API_BASE = "https://docorator1-ddhhfpc3eefvfrcy.centralindia-01.azurewebsites.net";
+const API_BASE = "http://localhost:8000";
 
 function getToken() {
     return localStorage.getItem("token");
