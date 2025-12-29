@@ -14,14 +14,20 @@ SECRET_KEY = os.getenv("SECRET_KEY", "supersecretkey_change_me_in_prod")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 # 7 days validity for convenience
 
+import hashlib
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+    # Pre-hash with SHA256 to allow passwords > 72 bytes and avoid bcrypt limit
+    digest = hashlib.sha256(plain_password.encode('utf-8')).hexdigest()
+    return pwd_context.verify(digest, hashed_password)
 
 def get_password_hash(password):
-    return pwd_context.hash(password)
+    # Pre-hash with SHA256 to allow passwords > 72 bytes and avoid bcrypt limit
+    digest = hashlib.sha256(password.encode('utf-8')).hexdigest()
+    return pwd_context.hash(digest)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
