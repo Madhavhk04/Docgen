@@ -96,7 +96,7 @@ Return this exact JSON structure:
   "receiver_salutation": "",
   "date": "Today's date",
   "subject": "",
-  "body": "Body of the letter"
+  "body": "Main content paragraphs ONLY. DO NOT include salutation (Dear X) or closing (Sincerely, Name). The template adds them automatically."
 }}
 """
 
