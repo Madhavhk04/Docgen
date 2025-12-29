@@ -6,10 +6,8 @@ echo "Date: $(date)"
 echo "PWD:  $(pwd)"
 echo "----------------------------------------"
 
-# ---- Install dependencies (CRITICAL) ----
-echo "Installing Python dependencies..."
-pip install --upgrade pip
-pip install -r requirements.txt
+# ---- Dependencies should be installed in Dockerfile ----
+# pip install lines removed to prevent timeout
 
 # ---- Port configuration ----
 LISTEN_PORT=${WEBSITES_PORT:-8000}

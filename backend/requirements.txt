@@ -13,3 +13,5 @@ passlib
 bcrypt==4.0.1
 python-jose[cryptography]
 sqlalchemy
+python-multipart
+email-validator
