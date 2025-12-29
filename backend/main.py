@@ -165,7 +165,7 @@ def signup(user: UserSchema, db: dict = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Signup failed: {str(e)}")
 
 class UserProfile(BaseModel):
-    id: int
+    id: str
     email: str
     full_name: Optional[str] = None
     profession: Optional[str] = None
