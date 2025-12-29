@@ -75,6 +75,39 @@ def health_db(db_status: dict = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Database Disconnected: {str(e)}")
 
+@app.get("/debug-db")
+def debug_db():
+    import os
+    from azure.cosmos import CosmosClient
+    
+    uri = os.getenv("COSMOS_DB_URI")
+    key = os.getenv("COSMOS_DB_KEY")
+    
+    if not uri or not key:
+        return {
+            "status": "error", 
+            "message": "Missing Environment Variables", 
+            "uri_configured": bool(uri), 
+            "key_configured": bool(key)
+        }
+        
+    try:
+        client = CosmosClient(uri, credential=key)
+        # Try listing databases to actually check connectivity
+        # This will fail if Firewall blocks it or Keys are wrong
+        dbs = list(client.list_databases())
+        return {
+            "status": "success", 
+            "message": "Connected to Cosmos DB", 
+            "databases": [d['id'] for d in dbs]
+        }
+    except Exception as e:
+        return {
+            "status": "error", 
+            "error_type": type(e).__name__,
+            "message": str(e)
+        }
+
 # --- AUTH ROUTER ---
 
 class UserSchema(BaseModel):
