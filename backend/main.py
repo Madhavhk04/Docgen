@@ -108,6 +108,11 @@ def debug_db():
             "message": str(e)
         }
 
+@app.get("/debug-init")
+def debug_init():
+    from database import init_error
+    return {"init_error": str(init_error) if init_error else "None (Success?)"}
+
 # --- AUTH ROUTER ---
 
 class UserSchema(BaseModel):
