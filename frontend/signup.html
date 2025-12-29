@@ -82,7 +82,7 @@
             const security_answer = document.getElementById('security_answer').value;
 
             try {
-                const res = await fetch('/auth/signup', {
+                const res = await fetch(window.APP_CONFIG.API_URL + '/auth/signup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
