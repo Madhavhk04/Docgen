@@ -30,18 +30,18 @@ User Input (Frontend)
 
 ## Features
 
-Schema-validated API for document generation
+Schema-validated API for document generation.
 
-AI-powered content creation using Gemini
+AI-powered content creation using Gemini.
 
-Persistent storage of user data and documents
+Persistent storage of user data and documents.
 
-Real-time retrieval of generated documents
+Real-time retrieval of generated documents.
 
-Downloadable outputs in PDF and DOCX formats
+Downloadable outputs in PDF and DOCX formats.
 
-Backend deployed on Azure App Service
+Backend deployed on Azure App Service.
 
-Environment variables managed via Azure configuration
+Environment variables managed via Azure configuration.
 
-Frontend hosted separately and connected via REST APIs
+Frontend hosted separately and connected via REST APIs.
