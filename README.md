@@ -3,7 +3,7 @@
 - https://salmon-forest-06e284c00.6.azurestaticapps.net/
 ## Overview
 
-The AI Document Generator Platform is an end-to-end application that generates professional documents such as resumes, letters, and contracts based on user prompts. The system processes user input through a backend API, leverages a large language model for content generation, stores outputs persistently, and enables real-time document retrieval.
+AI Document Generator Platform is an end-to-end application that generates professional documents such as resumes, letters, and contracts based on user prompts. The system processes user input through a backend API, leverages a large language model for content generation, stores outputs persistently, and enables real-time document retrieval.
 
 ## Tech Stack
 
